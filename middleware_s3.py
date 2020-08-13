@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 """
 Generate AWS4 authentication headers for your protected files
 
@@ -14,14 +14,18 @@ import re
 import socket
 import hashlib
 import hmac
-from urlparse import urlparse
+# backwards compatibility for python2
+try:
+    from urlparse import urlparse
+except ImportError:
+    from urllib.parse import urlparse
 
 # pylint: disable=E0611
 from Foundation import CFPreferencesCopyAppValue
 # pylint: enable=E0611
 
 BUNDLE_ID = 'ManagedInstalls'
-__version__ = '1.2'
+__version__ = '1.3'
 METHOD = 'GET'
 SERVICE = 's3'
 
@@ -70,14 +74,14 @@ def s3_auth_headers(url):
     # Create a date for headers and the credential string
     time_now = datetime.datetime.utcnow()
     amzdate = time_now.strftime('%Y%m%dT%H%M%SZ')
-    datestamp = time_now.strftime('%Y%m%d') # Date w/o time, used in credential scope
+    datestamp = time_now.strftime('%Y%m%d')  # Date w/o time, used in credential scope
     uri = uri_from_url(url)
     host = host_from_url(url)
     canonical_uri = uri
     canonical_querystring = ''
     canonical_headers = 'host:{}\nx-amz-date:{}\n'.format(host, amzdate)
     signed_headers = 'host;x-amz-date'
-    payload_hash = hashlib.sha256('').hexdigest()
+    payload_hash = hashlib.sha256(''.encode('utf-8')).hexdigest()
     canonical_request = '{}\n{}\n{}\n{}\n{}\n{}'.format(METHOD,
                                                         canonical_uri,
                                                         canonical_querystring,
@@ -87,12 +91,11 @@ def s3_auth_headers(url):
 
     algorithm = 'AWS4-HMAC-SHA256'
     credential_scope = '{}/{}/{}/aws4_request'.format(datestamp, REGION, SERVICE)
-    hashed_request = hashlib.sha256(canonical_request).hexdigest()
+    hashed_request = hashlib.sha256(canonical_request.encode('utf-8')).hexdigest()
     string_to_sign = '{}\n{}\n{}\n{}'.format(algorithm,
                                              amzdate,
                                              credential_scope,
                                              hashed_request)
-
 
     signing_key = get_signature_key(SECRET_KEY, datestamp, REGION, SERVICE)
     signature = hmac.new(signing_key, (string_to_sign).encode('utf-8'), hashlib.sha256).hexdigest()
